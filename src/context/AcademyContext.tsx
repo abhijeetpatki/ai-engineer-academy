@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { APPRECIATION_TOAST_MESSAGES } from '../data/achievementsData';
 import { LEARNING_TRACKS } from '../data/tracksData';
@@ -22,6 +22,8 @@ export interface LabSubmissionRecord {
   timestamp: number;
 }
 
+export type CloudSyncStatus = 'synced' | 'syncing' | 'offline';
+
 interface AcademyState {
   isAuthenticated: boolean;
   loggedInUsername: string;
@@ -43,9 +45,12 @@ interface AcademyState {
 interface AcademyContextValue extends AcademyState {
   activeToast: string | null;
   showWeMissedYouModal: boolean;
+  cloudSyncStatus: CloudSyncStatus;
+  lastCloudSyncAt: string | null;
   setShowWeMissedYouModal: (show: boolean) => void;
   login: (username: string, password: string, remember?: boolean) => boolean;
   logout: () => void;
+  syncWithCloudNow: () => Promise<void>;
   setUserName: (name: string) => void;
   toggleLessonComplete: (lessonId: string, lessonTitle?: string) => void;
   toggleBookmark: (itemId: string) => void;
@@ -106,6 +111,11 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const [activeToast, setActiveToast] = useState<string | null>(null);
   const [showWeMissedYouModal, setShowWeMissedYouModal] = useState<boolean>(false);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>('synced');
+  const [lastCloudSyncAt, setLastCloudSyncAt] = useState<string | null>(null);
+  const initialCloudPullCompleted = useRef<boolean>(false);
+  const stateRef = useRef<AcademyState>(state);
+  stateRef.current = state;
 
   // Check >24h inactivity on initial mount & update streak
   useEffect(() => {
@@ -132,7 +142,7 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Persist to localStorage
+  // Persist to localStorage immediately
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -140,6 +150,130 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       console.warn('Failed to save state to localStorage:', e);
     }
   }, [state]);
+
+  // Push & merge state with Vercel Cloud DB (/api/progress)
+  const pushStateToCloud = useCallback(async (snapshot: AcademyState) => {
+    if (!snapshot.isAuthenticated) return;
+    setCloudSyncStatus('syncing');
+    try {
+      const res = await fetch('/api/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: snapshot.loggedInUsername || 'sushama',
+          state: snapshot
+        })
+      });
+      if (!res.ok) {
+        setCloudSyncStatus('offline');
+        return;
+      }
+      const data = await res.json();
+      if (data?.ok && data.profile) {
+        setCloudSyncStatus('synced');
+        setLastCloudSyncAt(
+          new Date(data.syncedAt || Date.now()).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+        );
+      }
+    } catch {
+      setCloudSyncStatus('offline');
+    }
+  }, []);
+
+  // Pull & merge from Vercel Cloud DB on login / startup
+  const syncWithCloudNow = useCallback(async () => {
+    const current = stateRef.current;
+    if (!current.isAuthenticated) return;
+    setCloudSyncStatus('syncing');
+    try {
+      const res = await fetch(
+        `/api/progress?username=${encodeURIComponent(current.loggedInUsername || 'sushama')}`,
+        { cache: 'no-store' }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.ok && data.profile) {
+          const cloud = data.profile as Partial<AcademyState>;
+          setState((prev) => {
+            const completedLessons = Array.from(
+              new Set([...prev.completedLessons, ...(cloud.completedLessons || [])])
+            );
+            const bookmarkedItems = Array.from(
+              new Set([...prev.bookmarkedItems, ...(cloud.bookmarkedItems || [])])
+            );
+            const flashcardsReviewed = Array.from(
+              new Set([...prev.flashcardsReviewed, ...(cloud.flashcardsReviewed || [])])
+            );
+            const unlockedBadges = Array.from(
+              new Set([...prev.unlockedBadges, ...(cloud.unlockedBadges || [])])
+            );
+            const trackQuizScores = { ...(cloud.trackQuizScores || {}), ...prev.trackQuizScores };
+            const labSubmissions = { ...(cloud.labSubmissions || {}), ...prev.labSubmissions };
+            const interviewDrafts = { ...(cloud.interviewDrafts || {}), ...prev.interviewDrafts };
+
+            const examMap = new Map<string, ExamAttemptRecord>();
+            for (const ex of [...(cloud.examHistory || []), ...prev.examHistory]) {
+              if (ex && ex.id) examMap.set(ex.id, ex);
+            }
+
+            return {
+              ...prev,
+              userName: prev.userName || cloud.userName || 'Sushama',
+              completedLessons,
+              bookmarkedItems,
+              flashcardsReviewed,
+              unlockedBadges,
+              trackQuizScores,
+              labSubmissions,
+              interviewDrafts,
+              examHistory: Array.from(examMap.values()),
+              streakDays: Math.max(prev.streakDays, cloud.streakDays || 1)
+            };
+          });
+        }
+      }
+      initialCloudPullCompleted.current = true;
+      await pushStateToCloud(stateRef.current);
+    } catch {
+      initialCloudPullCompleted.current = true;
+      setCloudSyncStatus('offline');
+    }
+  }, [pushStateToCloud]);
+
+  // Run initial cloud pull & sync when authenticated
+  useEffect(() => {
+    if (state.isAuthenticated) {
+      syncWithCloudNow();
+    }
+  }, [state.isAuthenticated, syncWithCloudNow]);
+
+  // Auto-sync to Cloud DB whenever progress changes (debounced 800ms)
+  useEffect(() => {
+    if (!state.isAuthenticated || !initialCloudPullCompleted.current) return;
+    const timer = setTimeout(() => {
+      pushStateToCloud(state);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [
+    state.isAuthenticated,
+    state.userName,
+    state.completedLessons,
+    state.bookmarkedItems,
+    state.flashcardsReviewed,
+    state.trackQuizScores,
+    state.examHistory,
+    state.unlockedBadges,
+    state.labSubmissions,
+    state.interviewDrafts,
+    state.streakDays,
+    state.studyNudgeEnabled,
+    state.preferredStudyTime,
+    pushStateToCloud,
+    state
+  ]);
 
   // Global background polling for breaking AI news every 5 minutes
   useEffect(() => {
@@ -195,7 +329,7 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         lastActiveTimestamp: Date.now()
       }));
       triggerCelebration(
-        'Welcome back, Sushama! 🌸 Your QA-to-AI Engineering Portal & saved progress are ready ✨'
+        'Welcome back, Sushama! 🌸 Syncing your progress with the Cloud Database ✨'
       );
       return true;
     }
@@ -203,11 +337,12 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const logout = () => {
+    pushStateToCloud(stateRef.current);
     setState((prev) => ({
       ...prev,
       isAuthenticated: false
     }));
-    setActiveToast('Signed out safely. All your progress is saved for your next session, Sushama 🌸');
+    setActiveToast('Signed out safely. All your progress is backed up in the Cloud Database, Sushama 🌸');
   };
 
   // Automatically evaluate badge unlock rules whenever progress updates
@@ -263,7 +398,7 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (!alreadyDone) {
         triggerCelebration(
           lessonTitle
-            ? `Sushama, you just mastered "${lessonTitle}"! One step closer to that AI Engineer title ✨`
+            ? `Sushama, you just mastered "${lessonTitle}"! Saved to Cloud DB ✨`
             : undefined
         );
       }
@@ -310,7 +445,7 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const pct = Math.round((score / total) * 100);
     triggerCelebration(
       pct >= 80
-        ? `Brilliant ${pct}% on the Track Check, Sushama! Your QA analytical instincts are spot-on ✨`
+        ? `Brilliant ${pct}% on the Track Check, Sushama! Saved to Cloud DB ✨`
         : `Great practice round (${pct}%)! Every explanation reviewed sharpens your engineering edge 🌸`
     );
   };
@@ -343,7 +478,7 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }));
     if (breakdown.total >= 80) {
       triggerCelebration(
-        `Lab Passed with ${breakdown.total}/100 (${breakdown.verdictTitle}), Sushama! Your hands-on AI engineering skills are shining ✨`
+        `Lab Passed with ${breakdown.total}/100 (${breakdown.verdictTitle}), Sushama! Synced to Cloud DB ✨`
       );
     }
   };
@@ -427,9 +562,12 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...state,
         activeToast,
         showWeMissedYouModal,
+        cloudSyncStatus,
+        lastCloudSyncAt,
         setShowWeMissedYouModal,
         login,
         logout,
+        syncWithCloudNow,
         setUserName,
         toggleLessonComplete,
         toggleBookmark,

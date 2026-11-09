@@ -19,7 +19,9 @@ import {
   X,
   Radio,
   LogOut,
-  UserCheck
+  UserCheck,
+  Cloud,
+  RefreshCw
 } from 'lucide-react';
 import { useAcademy } from '../context/AcademyContext';
 import { LEARNING_TRACKS } from '../data/tracksData';
@@ -102,6 +104,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     isAuthenticated,
     loggedInUsername,
     logout,
+    cloudSyncStatus,
+    lastCloudSyncAt,
+    syncWithCloudNow,
     userName,
     completedLessons,
     streakDays,
@@ -313,6 +318,30 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={syncWithCloudNow}
+              className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 transition-all"
+              title={
+                lastCloudSyncAt
+                  ? `Cloud DB (sushama-academy-db) synced at ${lastCloudSyncAt}. Click to sync now.`
+                  : 'Syncing with Vercel Cloud DB (sushama-academy-db)'
+              }
+            >
+              {cloudSyncStatus === 'syncing' ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-700" />
+              ) : (
+                <Cloud className="w-3.5 h-3.5 text-emerald-700" />
+              )}
+              <span>
+                {cloudSyncStatus === 'syncing'
+                  ? 'Syncing DB...'
+                  : cloudSyncStatus === 'synced'
+                  ? 'Cloud DB Synced'
+                  : 'Local + Cloud Cache'}
+              </span>
+            </button>
+
             <div className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FAF7F2] border border-[#E8A598]/50 text-xs font-semibold text-[#1E293B]">
               <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
               <span>@{loggedInUsername}</span>
