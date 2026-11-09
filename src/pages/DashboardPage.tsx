@@ -333,9 +333,9 @@ export const DashboardPage: React.FC = () => {
           </Link>
         </div>
 
-        {/* 4-Card Country & Pros/Cons Spotlight */}
+        {/* 8-Card Country, Open-Source & Pros/Cons Spotlight */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {CURATED_GLOBAL_MODELS.slice(0, 4).map((m) => (
+          {CURATED_GLOBAL_MODELS.slice(0, 8).map((m) => (
             <Link
               key={m.id}
               to="/ai-pulse"
@@ -347,8 +347,14 @@ export const DashboardPage: React.FC = () => {
                     <span>{m.countryFlag}</span>
                     <span>{m.country}</span>
                   </span>
-                  <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-white border border-[#E8A598]/50 text-[#9E4758]">
-                    {m.licenseType}
+                  <span
+                    className={`font-mono text-[10px] px-2 py-0.5 rounded-full border ${
+                      m.licenseType === 'Open-Weights / Open-Source'
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                        : 'bg-white border-[#E8A598]/50 text-[#9E4758]'
+                    }`}
+                  >
+                    {m.licenseType === 'Open-Weights / Open-Source' ? 'Open-Source' : 'Proprietary'}
                   </span>
                 </div>
                 <div className="font-bold text-sm text-[#1E293B] mt-1.5 font-editorial">

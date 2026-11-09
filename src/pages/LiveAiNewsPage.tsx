@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Radio,
   RefreshCw,
@@ -13,7 +13,11 @@ import {
   Globe,
   Cpu,
   Search,
-  Layers
+  Layers,
+  Filter,
+  X,
+  Unlock,
+  Lock
 } from 'lucide-react';
 import { fetchLiveAiNews, LiveAiNewsItem } from '../services/liveAiNewsService';
 import { fetchLiveGlobalModels, GlobalAiModel } from '../services/liveModelsService';
@@ -34,17 +38,50 @@ const COUNTRY_FILTERS = [
   { label: '🇨🇳 China', value: 'China' },
   { label: '🇫🇷 France', value: 'France' },
   { label: '🇨🇦 Canada', value: 'Canada' },
+  { label: '🇯🇵 Japan', value: 'Japan' },
+  { label: '🇰🇷 South Korea', value: 'South Korea' },
   { label: '🇮🇳 India', value: 'India' }
+];
+
+const PROVIDER_FILTERS = [
+  { label: 'All Labs & Providers', value: 'All' },
+  { label: 'OpenAI (GPT-6.1 / gpt-oss)', value: 'openai' },
+  { label: 'Anthropic (Claude 5.5 / Fable)', value: 'anthropic' },
+  { label: 'Google (Gemini 4 / Gemma 4)', value: 'google' },
+  { label: 'NVIDIA (Nemotron 3.5 / Ultra)', value: 'nvidia' },
+  { label: 'xAI (Grok 4.7 / 4.6)', value: 'x-ai' },
+  { label: 'Meta (Muse Spark / Llama 4)', value: 'meta' },
+  { label: 'DeepSeek (V4.1 / V4 Pro / R1)', value: 'deepseek' },
+  { label: 'Alibaba (Qwen 3.8 / Coder)', value: 'qwen' },
+  { label: 'Mistral (Large 4 / Devstral)', value: 'mistralai' },
+  { label: 'Moonshot (Kimi K3.1 Pro)', value: 'moonshotai' },
+  { label: 'Z.ai / Zhipu (GLM 5.3)', value: 'zai' },
+  { label: 'Tencent / MiniMax / Xiaomi', value: 'china-emerging' },
+  { label: 'LiquidAI / IBM Granite / MSFT', value: 'us-slm' },
+  { label: 'Cohere / Sakana / Upstage / Sarvam', value: 'sovereign' }
+];
+
+const CATEGORY_FILTERS: Array<GlobalAiModel['categoryBadge'] | 'All'> = [
+  'All',
+  'Frontier Reasoning',
+  'Coding & Agents',
+  'Multimodal Flagship',
+  'Open-Weights Leader',
+  'Fast & Edge SLM',
+  'Sovereign / Regional AI'
 ];
 
 export const LiveAiNewsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'models' | 'news'>('models');
 
-  // Models state
+  // Models filter & sort state
   const [models, setModels] = useState<GlobalAiModel[]>([]);
   const [newlyLaunchedModels, setNewlyLaunchedModels] = useState<GlobalAiModel[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string>('All');
-  const [licenseFilter, setLicenseFilter] = useState<'All' | 'Proprietary API' | 'Open-Weights'>('All');
+  const [selectedProvider, setSelectedProvider] = useState<string>('All');
+  const [selectedCategoryBadge, setSelectedCategoryBadge] = useState<GlobalAiModel['categoryBadge'] | 'All'>('All');
+  const [licenseFilter, setLicenseFilter] = useState<'All' | 'Open-Weights / Open-Source' | 'Proprietary API'>('All');
+  const [sortBy, setSortBy] = useState<'featured' | 'newest' | 'context' | 'opensource'>('featured');
   const [modelSearch, setModelSearch] = useState<string>('');
 
   // News state
@@ -142,21 +179,82 @@ export const LiveAiNewsPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [loadAllLiveRadar, autoNotifyEnabled]);
 
-  const filteredModels = models.filter((m) => {
-    if (selectedCountry !== 'All' && m.country !== selectedCountry) return false;
-    if (licenseFilter !== 'All' && m.licenseType !== licenseFilter) return false;
-    if (modelSearch.trim()) {
-      const q = modelSearch.toLowerCase();
-      return (
-        m.name.toLowerCase().includes(q) ||
-        m.provider.toLowerCase().includes(q) ||
-        m.country.toLowerCase().includes(q) ||
-        m.versionLabel.toLowerCase().includes(q) ||
-        m.categoryBadge.toLowerCase().includes(q)
-      );
+  const filteredModels = useMemo(() => {
+    const list = models.filter((m) => {
+      if (selectedCountry !== 'All' && m.country !== selectedCountry) return false;
+      if (licenseFilter !== 'All' && m.licenseType !== licenseFilter) return false;
+      if (selectedCategoryBadge !== 'All' && m.categoryBadge !== selectedCategoryBadge) return false;
+
+      if (selectedProvider !== 'All') {
+        if (selectedProvider === 'china-emerging') {
+          if (!['tencent', 'minimax', 'xiaomi', 'bytedance'].includes(m.providerKey)) return false;
+        } else if (selectedProvider === 'us-slm') {
+          if (!['liquid', 'ibm', 'microsoft'].includes(m.providerKey)) return false;
+        } else if (selectedProvider === 'sovereign') {
+          if (!['cohere', 'sakana', 'upstage', 'sarvam'].includes(m.providerKey)) return false;
+        } else if (m.providerKey !== selectedProvider) {
+          return false;
+        }
+      }
+
+      if (modelSearch.trim()) {
+        const q = modelSearch.toLowerCase().trim();
+        const hay = [
+          m.id,
+          m.name,
+          m.versionLabel,
+          m.provider,
+          m.country,
+          m.headquarters,
+          m.licenseType,
+          m.licenseDetail,
+          m.categoryBadge,
+          ...m.modalities,
+          ...m.pros,
+          ...m.cons
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+
+    if (sortBy === 'newest') {
+      return [...list].sort((a, b) => b.releaseTimestampMs - a.releaseTimestampMs);
     }
-    return true;
-  });
+    if (sortBy === 'context') {
+      return [...list].sort((a, b) => b.contextWindowTokens - a.contextWindowTokens);
+    }
+    if (sortBy === 'opensource') {
+      return [...list].sort((a, b) => {
+        if (a.licenseType === b.licenseType) return b.releaseTimestampMs - a.releaseTimestampMs;
+        return a.licenseType === 'Open-Weights / Open-Source' ? -1 : 1;
+      });
+    }
+    return list;
+  }, [models, selectedCountry, licenseFilter, selectedCategoryBadge, selectedProvider, modelSearch, sortBy]);
+
+  const openWeightsCount = useMemo(
+    () => models.filter((m) => m.licenseType === 'Open-Weights / Open-Source').length,
+    [models]
+  );
+
+  const hasActiveFilters =
+    selectedCountry !== 'All' ||
+    selectedProvider !== 'All' ||
+    selectedCategoryBadge !== 'All' ||
+    licenseFilter !== 'All' ||
+    modelSearch.trim() !== '';
+
+  const resetAllFilters = () => {
+    setSelectedCountry('All');
+    setSelectedProvider('All');
+    setSelectedCategoryBadge('All');
+    setLicenseFilter('All');
+    setModelSearch('');
+    setSortBy('featured');
+  };
 
   const filteredNews = newsItems.filter(
     (item) => selectedCategory === 'All' || item.category === selectedCategory
@@ -189,10 +287,10 @@ export const LiveAiNewsPage: React.FC = () => {
         </div>
 
         <h1 className="text-2xl md:text-3xl font-bold text-[#1E293B] font-editorial">
-          Global AI Models Directory (Country of Origin, Pros & Cons) + Live Releases 🌍
+          Global AI Models Directory (Frontier + Open-Source, Country Origin, Pros & Cons) 🌍
         </h1>
         <p className="text-sm text-[#64748B] mt-1 max-w-4xl leading-relaxed">
-          Automatically tracks every newly launched LLM and version via the live **OpenRouter Global Model Registry API** & **Hacker News AI Feed**—showing you each model's **Country of Origin**, **Context Window**, **Pricing**, **Engineering Pros & Cons**, and **QA-to-AI Verdict**.
+          Live-synced with the **OpenRouter & Vercel AI Gateway 2026 Model Registries**—featuring **OpenAI (`GPT-6.1 Terra/Sol`, `GPT-6 Astra`, `gpt-oss-120b`)**, **Anthropic (`Claude 5.5 Fleet`, `Fable 5.1`)**, **Google (`Gemini 4 Argon`, `Omni 1.2 Flash`, `Gemma 4`)**, **NVIDIA (`Nemotron 3.5 Super VL`, `Nemotron-3 Ultra 550B`)**, **xAI (`Grok 4.7`)**, **Meta (`Muse Spark Open`, `Llama 4`)**, **DeepSeek (`V4.1 Flash`, `V4 Pro`, `R1`)**, **Alibaba (`Qwen 3.8`, `Qwen3 Coder`)**, **Mistral (`Large 4`, `Devstral`)**, **Moonshot (`Kimi K3.1 Pro`)**, **Z.ai (`GLM 5.3`)**, **LiquidAI (`LFM3`)**, and **IBM (`Granite 4.2`)**.
         </p>
 
         {/* Primary View Switcher Tabs */}
@@ -208,10 +306,7 @@ export const LiveAiNewsPage: React.FC = () => {
               }`}
             >
               <Globe className="w-4 h-4" />
-              <span>🌍 Live Global Models (Country, Pros & Cons)</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-white/20">
-                {models.length}
-              </span>
+              <span>🌍 Live Global Models ({models.length} Total • {openWeightsCount} Open-Source)</span>
             </button>
 
             <button
@@ -224,10 +319,7 @@ export const LiveAiNewsPage: React.FC = () => {
               }`}
             >
               <Radio className="w-4 h-4" />
-              <span>📡 Breaking AI Engineering News</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-white/20">
-                {newsItems.length}
-              </span>
+              <span>📡 Breaking AI Engineering News ({newsItems.length})</span>
             </button>
           </div>
 
@@ -239,7 +331,7 @@ export const LiveAiNewsPage: React.FC = () => {
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#9E4758] text-white text-xs font-semibold hover:bg-[#7D3543] transition-all shadow-sm disabled:opacity-60"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? 'Checking Live Launches...' : 'Sync New Model Launches & Notify 🔔'}
+              {loading ? 'Syncing Live Registry...' : 'Sync New Model Launches & Notify 🔔'}
             </button>
 
             <button
@@ -261,65 +353,204 @@ export const LiveAiNewsPage: React.FC = () => {
       {/* TAB 1: LIVE GLOBAL AI MODELS DIRECTORY (COUNTRY OF ORIGIN + PROS & CONS) */}
       {activeTab === 'models' && (
         <section className="space-y-6">
-          {/* Country, License & Search Filter Bar */}
-          <div className="rounded-2xl bg-[#FAF7F2] border border-[#E8A598]/50 p-4 sm:p-5 space-y-4">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-              {/* Country Pills */}
-              <div className="flex flex-wrap items-center gap-2">
-                {COUNTRY_FILTERS.map((cf) => (
+          {/* Comprehensive Search & Multi-Filter Console */}
+          <div className="rounded-3xl bg-[#FAF7F2] border border-[#E8A598]/60 p-5 sm:p-6 shadow-editorial space-y-5">
+            {/* Row 1: Search Bar + License Toggle + Sort Selector */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
+              {/* Instant Search Input */}
+              <div className="lg:col-span-5 relative">
+                <Search className="w-4 h-4 text-[#9E4758] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={modelSearch}
+                  onChange={(e) => setModelSearch(e.target.value)}
+                  placeholder="Search model, version, lab (e.g. Nemotron, Grok 4.7, GPT-6.1, Claude 5.5, Gemma 4, DeepSeek V4.1)..."
+                  className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-white border border-[#E8A598] text-xs sm:text-sm font-medium text-[#1E293B] focus:outline-none focus:border-[#9E4758] shadow-2xs"
+                />
+                {modelSearch && (
                   <button
-                    key={cf.value}
                     type="button"
-                    onClick={() => setSelectedCountry(cf.value)}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      selectedCountry === cf.value
+                    onClick={() => setModelSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[#64748B] hover:text-[#9E4758]"
+                    aria-label="Clear search"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Open-Source vs Proprietary Filter Buttons */}
+              <div className="lg:col-span-4 flex items-center gap-1.5 bg-white p-1 rounded-xl border border-[#E8A598]/60">
+                <button
+                  type="button"
+                  onClick={() => setLicenseFilter('All')}
+                  className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition-all ${
+                    licenseFilter === 'All'
+                      ? 'bg-[#9E4758] text-white'
+                      : 'text-[#64748B] hover:text-[#1E293B]'
+                  }`}
+                >
+                  All ({models.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLicenseFilter('Open-Weights / Open-Source')}
+                  className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold inline-flex items-center justify-center gap-1 transition-all ${
+                    licenseFilter === 'Open-Weights / Open-Source'
+                      ? 'bg-emerald-700 text-white'
+                      : 'text-emerald-800 hover:bg-emerald-50'
+                  }`}
+                >
+                  <Unlock className="w-3.5 h-3.5" />
+                  <span>Open-Source ({openWeightsCount})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLicenseFilter('Proprietary API')}
+                  className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold inline-flex items-center justify-center gap-1 transition-all ${
+                    licenseFilter === 'Proprietary API'
+                      ? 'bg-[#9E4758] text-white'
+                      : 'text-[#64748B] hover:text-[#1E293B]'
+                  }`}
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Proprietary</span>
+                </button>
+              </div>
+
+              {/* Sort By Dropdown */}
+              <div className="lg:col-span-3 flex items-center gap-2">
+                <label htmlFor="model-sort-select" className="text-xs font-bold text-[#64748B] shrink-0">
+                  Sort:
+                </label>
+                <select
+                  id="model-sort-select"
+                  value={sortBy}
+                  onChange={(e) =>
+                    setSortBy(e.target.value as 'featured' | 'newest' | 'context' | 'opensource')
+                  }
+                  className="w-full py-2.5 px-3 rounded-xl bg-white border border-[#E8A598] text-xs font-bold text-[#1E293B] focus:outline-none focus:border-[#9E4758]"
+                >
+                  <option value="featured">⭐ Featured Flagships + Live</option>
+                  <option value="newest">🕒 Newest Launch Date First</option>
+                  <option value="opensource">🔓 Open-Source / Open-Weights First</option>
+                  <option value="context">📏 Largest Context Window First</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Row 2: Filter by Provider / Lab (NVIDIA, Grok, OpenAI, Anthropic, Google, DeepSeek, Qwen, Meta, Mistral, etc.) */}
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B] flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-[#9E4758]" /> Filter by AI Lab / Provider:
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {PROVIDER_FILTERS.map((pf) => (
+                  <button
+                    key={pf.value}
+                    type="button"
+                    onClick={() => setSelectedProvider(pf.value)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      selectedProvider === pf.value
                         ? 'bg-[#9E4758] text-white shadow-2xs'
                         : 'bg-white text-[#1E293B] border border-[#E8A598]/50 hover:bg-[#F5EBE6]'
                     }`}
                   >
-                    {cf.label}
+                    {pf.label}
                   </button>
                 ))}
               </div>
+            </div>
 
-              {/* License & Search */}
-              <div className="flex flex-wrap items-center gap-2.5">
-                <div className="inline-flex rounded-xl bg-white p-1 border border-[#E8A598]/50 text-xs font-semibold">
-                  {(['All', 'Proprietary API', 'Open-Weights'] as const).map((lic) => (
+            {/* Row 3: Filter by Country of Origin + Specialization Category */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-3 border-t border-[#E8A598]/40">
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">
+                  Filter by Country of Origin:
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {COUNTRY_FILTERS.map((cf) => (
                     <button
-                      key={lic}
+                      key={cf.value}
                       type="button"
-                      onClick={() => setLicenseFilter(lic)}
-                      className={`px-2.5 py-1 rounded-lg transition-all ${
-                        licenseFilter === lic
-                          ? 'bg-[#9E4758] text-white'
-                          : 'text-[#64748B] hover:text-[#1E293B]'
+                      onClick={() => setSelectedCountry(cf.value)}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                        selectedCountry === cf.value
+                          ? 'bg-[#9E4758] text-white shadow-2xs'
+                          : 'bg-white text-[#1E293B] border border-[#E8A598]/50 hover:bg-[#F5EBE6]'
                       }`}
                     >
-                      {lic}
+                      {cf.label}
                     </button>
                   ))}
                 </div>
+              </div>
 
-                <div className="relative flex-1 sm:w-64">
-                  <Search className="w-3.5 h-3.5 text-[#9E4758] absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={modelSearch}
-                    onChange={(e) => setModelSearch(e.target.value)}
-                    placeholder="Search Claude, Gemini, DeepSeek, China..."
-                    className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white border border-[#E8A598] text-xs font-medium text-[#1E293B] focus:outline-none focus:border-[#9E4758]"
-                  />
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">
+                  Filter by Engineering Specialization:
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {CATEGORY_FILTERS.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedCategoryBadge(cat)}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                        selectedCategoryBadge === cat
+                          ? 'bg-[#9E4758] text-white shadow-2xs'
+                          : 'bg-white text-[#1E293B] border border-[#E8A598]/50 hover:bg-[#F5EBE6]'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
+
+            {/* Active Filter Result Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#E8A598]/30 text-xs">
+              <div className="font-semibold text-[#1E293B]">
+                Showing <span className="font-bold text-[#9E4758]">{filteredModels.length}</span> of{' '}
+                <span className="font-bold">{models.length}</span> live & flagship models
+              </div>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={resetAllFilters}
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-white border border-[#9E4758] text-xs font-bold text-[#9E4758] hover:bg-[#F5EBE6]"
+                >
+                  <X className="w-3.5 h-3.5" /> Reset All Filters
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Empty state if search has no matches */}
+          {filteredModels.length === 0 && (
+            <div className="rounded-3xl border border-[#E8A598]/60 bg-white p-10 text-center space-y-3">
+              <div className="text-lg font-bold text-[#1E293B] font-editorial">
+                No models matched your current filter combination
+              </div>
+              <p className="text-xs text-[#64748B]">
+                Try clearing one of the country, license, or provider filters above to view all {models.length} models.
+              </p>
+              <button
+                type="button"
+                onClick={resetAllFilters}
+                className="px-4 py-2 rounded-xl bg-[#9E4758] text-white text-xs font-bold"
+              >
+                Reset All Filters
+              </button>
+            </div>
+          )}
 
           {/* Models Cards Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {filteredModels.map((model, idx) => {
               const isNewlyLaunched =
-                newlyLaunchedModels.some((n) => n.id === model.id) || idx < 3;
+                newlyLaunchedModels.some((n) => n.id === model.id) || idx < 6;
 
               return (
                 <article
@@ -332,22 +563,24 @@ export const LiveAiNewsPage: React.FC = () => {
                       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF7F2] border border-[#E8A598] text-xs font-bold text-[#1E293B]">
                         <span className="text-base leading-none">{model.countryFlag}</span>
                         <span>{model.country}</span>
-                        <span className="text-[#64748B] font-normal">• {model.provider}</span>
+                        <span className="text-[#9E4758] font-bold">• {model.provider}</span>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <span
                           className={`text-[10px] font-mono font-bold uppercase px-2.5 py-1 rounded-full ${
-                            model.licenseType === 'Open-Weights'
+                            model.licenseType === 'Open-Weights / Open-Source'
                               ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                               : 'bg-[#F5EBE6] text-[#9E4758] border border-[#E8A598]'
                           }`}
                         >
-                          {model.licenseType}
+                          {model.licenseType === 'Open-Weights / Open-Source'
+                            ? '🔓 Open-Weights / Open-Source'
+                            : '🔒 Proprietary API'}
                         </span>
                         {isNewlyLaunched && (
                           <span className="text-[10px] font-mono font-bold uppercase px-2.5 py-1 rounded-full bg-[#9E4758] text-white flex items-center gap-1">
-                            <Sparkles className="w-3 h-3" /> LIVE VERSION
+                            <Sparkles className="w-3 h-3" /> {model.releaseDateLabel}
                           </span>
                         )}
                       </div>
@@ -368,7 +601,7 @@ export const LiveAiNewsPage: React.FC = () => {
                         <span>•</span>
                         <span className="font-semibold text-[#9E4758]">{model.categoryBadge}</span>
                         <span>•</span>
-                        <span>Updated {formatRelativeTime(model.releaseTimestampMs)}</span>
+                        <span className="font-mono text-[11px]">{model.licenseDetail}</span>
                       </div>
                     </div>
 
