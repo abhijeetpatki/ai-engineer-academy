@@ -16,7 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
-  X
+  X,
+  Radio
 } from 'lucide-react';
 import { useAcademy } from '../context/AcademyContext';
 import { LEARNING_TRACKS } from '../data/tracksData';
@@ -32,10 +33,18 @@ const NAV_ITEMS = [
   },
   {
     path: '/tracks',
-    label: '5 Learning Tracks',
+    label: '5 Learning Tracks + Labs',
     shortLabel: 'Tracks',
     icon: BookOpen,
     section: 'core'
+  },
+  {
+    path: '/ai-pulse',
+    label: 'Live AI News Radar',
+    shortLabel: 'Live News',
+    icon: Radio,
+    section: 'core',
+    badge: 'LIVE'
   },
   {
     path: '/certification',

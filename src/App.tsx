@@ -10,6 +10,7 @@ import { JargonDictionaryPage } from './pages/JargonDictionaryPage';
 import { ReferenceDocsPage } from './pages/ReferenceDocsPage';
 import { PracticalLabsPage } from './pages/PracticalLabsPage';
 import { AchievementsPage } from './pages/AchievementsPage';
+import { LiveAiNewsPage } from './pages/LiveAiNewsPage';
 
 export function App() {
   return (
@@ -19,6 +20,7 @@ export function App() {
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/tracks" element={<TracksPage />} />
+            <Route path="/ai-pulse" element={<LiveAiNewsPage />} />
             <Route path="/certification" element={<CertificationPage />} />
             <Route path="/interview-prep" element={<InterviewPrepPage />} />
             <Route path="/jargon-dictionary" element={<JargonDictionaryPage />} />

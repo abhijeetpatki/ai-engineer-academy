@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Sparkles,
@@ -15,12 +15,15 @@ import {
   CheckCircle2,
   ArrowRight,
   ShieldCheck,
-  Edit3
+  Edit3,
+  Radio,
+  ExternalLink
 } from 'lucide-react';
 import { useAcademy } from '../context/AcademyContext';
 import { LEARNING_TRACKS } from '../data/tracksData';
 import { ACHIEVEMENT_BADGES, PERSONAL_LOVE_NOTES } from '../data/achievementsData';
 import { PRACTICAL_LAB_TASKS } from '../data/practicalLabs';
+import { fetchLiveAiNews, LiveAiNewsItem } from '../services/liveAiNewsService';
 
 export const DashboardPage: React.FC = () => {
   const {
@@ -42,7 +45,14 @@ export const DashboardPage: React.FC = () => {
 
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(userName);
+  const [topLiveNews, setTopLiveNews] = useState<LiveAiNewsItem[]>([]);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchLiveAiNews().then((res) => {
+      setTopLiveNews(res.items.slice(0, 3));
+    });
+  }, []);
 
   const totalLessons = LEARNING_TRACKS.reduce((sum, t) => sum + t.lessons.length, 0);
   const completedCount = completedLessons.length;
@@ -298,6 +308,56 @@ export const DashboardPage: React.FC = () => {
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </div>
           </Link>
+        </div>
+      </section>
+
+      {/* Live Auto-Updating AI News & Breakthroughs Ticker */}
+      <section className="rounded-2xl border-2 border-[#9E4758]/30 bg-white p-5 md:p-6 shadow-editorial space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#9E4758] text-white text-xs font-bold uppercase tracking-wider">
+              <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
+              <Radio className="w-3.5 h-3.5" /> Live Auto-Updating AI Feed
+            </span>
+            <h2 className="text-lg md:text-xl font-bold text-[#1E293B] font-editorial">
+              Latest AI Engineering Breakthroughs & Releases
+            </h2>
+          </div>
+
+          <Link
+            to="/ai-pulse"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#FAF7F2] border border-[#E8A598] text-xs font-bold text-[#9E4758] hover:bg-[#F5EBE6]"
+          >
+            Open Full Live AI Radar & Notifications 🔔 <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {topLiveNews.map((news) => (
+            <a
+              key={news.id}
+              href={news.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group rounded-xl border border-[#E8A598]/50 bg-[#FAF7F2]/70 p-4 hover:bg-white hover:border-[#9E4758] transition-all flex flex-col justify-between space-y-2.5"
+            >
+              <div>
+                <div className="flex items-center justify-between text-[11px] font-mono text-[#9E4758] font-bold mb-1">
+                  <span>{news.category}</span>
+                  <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100" />
+                </div>
+                <div className="font-bold text-xs sm:text-sm text-[#1E293B] line-clamp-2 group-hover:text-[#9E4758]">
+                  {news.title}
+                </div>
+                <p className="text-[11px] text-[#64748B] mt-1.5 line-clamp-2">
+                  💡 {news.qaEngineerTakeaway}
+                </p>
+              </div>
+              <div className="text-[10px] font-mono text-[#64748B] pt-1 border-t border-[#E8A598]/30">
+                Source: {news.source}
+              </div>
+            </a>
+          ))}
         </div>
       </section>
 

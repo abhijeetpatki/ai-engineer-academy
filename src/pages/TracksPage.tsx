@@ -11,15 +11,23 @@ import {
   ExternalLink,
   Clock,
   Award,
-  HelpCircle
+  HelpCircle,
+  Wrench,
+  Radio,
+  Table
 } from 'lucide-react';
 import { LEARNING_TRACKS } from '../data/tracksData';
+import { LESSON_DEEP_CONTENT } from '../data/lessonDeepContent';
 import { EXAM_QUESTIONS } from '../data/examQuestions';
 import { ConceptMode } from '../types/academy';
 import { useAcademy } from '../context/AcademyContext';
 import { InteractiveFlowchart } from '../components/InteractiveFlowchart';
 import { PromptDiffSandbox } from '../components/PromptDiffSandbox';
 import { FlashcardDeck } from '../components/FlashcardDeck';
+import {
+  TokenizerAndTemperatureSimulator,
+  RagChunkingAndHybridSimulator
+} from '../components/InteractiveSimulators';
 
 export const TracksPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -28,6 +36,7 @@ export const TracksPage: React.FC = () => {
   const [selectedTrackId, setSelectedTrackId] = useState<string>(initialTrackId);
   const [conceptMode, setConceptMode] = useState<ConceptMode>('qa_analogy');
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
+  const [lessonCheckAnswers, setLessonCheckAnswers] = useState<Record<string, number>>({});
 
   const {
     completedLessons,
@@ -119,24 +128,41 @@ export const TracksPage: React.FC = () => {
           {activeTrack.overview}
         </p>
 
-        <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-[#E8A598]/60 text-xs font-semibold text-[#9E4758]">
-          <ShieldCheck className="w-4 h-4 shrink-0" />
-          <span>QA Bridge Superpower: {activeTrack.qaSuperpowerTag}</span>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-[#E8A598]/60 text-xs font-semibold text-[#9E4758]">
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            <span>QA Bridge Superpower: {activeTrack.qaSuperpowerTag}</span>
+          </div>
+
+          {activeTrack.id === 'track-5' && (
+            <Link
+              to="/ai-pulse"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#9E4758] text-white text-xs font-semibold hover:bg-[#7D3543]"
+            >
+              <Radio className="w-4 h-4" /> Open Live Auto-Updating AI News Feed 🔔
+            </Link>
+          )}
         </div>
       </section>
 
       {/* Interactive Architectural Flowchart (Every Track) */}
       <InteractiveFlowchart spec={activeTrack.flowchart} />
 
+      {/* Track 1 Interactive Hands-On Simulator: Live BPE Tokenizer & Temperature Lab */}
+      {activeTrack.id === 'track-1' && <TokenizerAndTemperatureSimulator />}
+
+      {/* Track 4 Interactive Hands-On Simulator: Live RAG Chunking & Hybrid Search Lab */}
+      {activeTrack.id === 'track-4' && <RagChunkingAndHybridSimulator />}
+
       {/* 3-Mode Concept Switcher Sticky Bar */}
       <section className="space-y-5">
         <div className="sticky top-14 z-20 rounded-2xl bg-white/95 backdrop-blur-md border-2 border-[#9E4758]/30 p-3.5 shadow-editorial flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-[#9E4758] flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" /> 3-Mode Concept Switcher
+              <Sparkles className="w-3.5 h-3.5" /> 3-Mode Concept Switcher + Guided Walkthrough
             </div>
             <div className="text-xs text-[#64748B]">
-              Toggle how every lesson below is explained: Simple, QA/Testing Analogy, or Production Code Deep-Dive
+              Switch perspectives anytime—plus every lesson below includes a Step-by-Step Guide, Comparison Table, Debugging Playbook & Quick Check!
             </div>
           </div>
 
@@ -178,21 +204,23 @@ export const TracksPage: React.FC = () => {
         </div>
 
         {/* Lessons List */}
-        <div className="space-y-6">
+        <div className="space-y-8">
           {activeTrack.lessons.map((lesson, idx) => {
             const isCompleted = completedLessons.includes(lesson.id);
             const isBookmarked = bookmarkedItems.includes(lesson.id);
+            const deepWalkthrough = LESSON_DEEP_CONTENT[lesson.id];
+            const selectedMicroOpt = lessonCheckAnswers[lesson.id];
 
             return (
               <article
                 key={lesson.id}
-                className={`rounded-2xl border p-6 transition-all ${
+                className={`rounded-2xl border p-6 md:p-8 transition-all space-y-6 ${
                   isCompleted
                     ? 'bg-[#FAF7F2] border-emerald-300 shadow-editorial'
                     : 'bg-white border-[#E8A598]/60 shadow-editorial'
                 }`}
               >
-                <div className="flex flex-wrap items-start justify-between gap-4 pb-4 mb-4 border-b border-[#F5EBE6]">
+                <div className="flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-[#F5EBE6]">
                   <div>
                     <div className="flex items-center gap-2 text-xs font-mono text-[#9E4758] font-bold">
                       <span>
@@ -200,10 +228,10 @@ export const TracksPage: React.FC = () => {
                       </span>
                       <span>•</span>
                       <span className="inline-flex items-center gap-1 text-[#64748B]">
-                        <Clock className="w-3.5 h-3.5" /> {lesson.durationMinutes} mins
+                        <Clock className="w-3.5 h-3.5" /> {lesson.durationMinutes} mins study
                       </span>
                     </div>
-                    <h3 className="text-xl font-bold text-[#1E293B] font-editorial mt-1">
+                    <h3 className="text-xl md:text-2xl font-bold text-[#1E293B] font-editorial mt-1">
                       {lesson.title}
                     </h3>
                     <p className="text-xs sm:text-sm text-[#64748B] mt-1">{lesson.summary}</p>
@@ -355,6 +383,148 @@ export const TracksPage: React.FC = () => {
                     </div>
                   </div>
                 )}
+
+                {/* GUIDED STEP-BY-STEP WALKTHROUGH, COMPARISON TABLE & DEBUGGING PLAYBOOK */}
+                {deepWalkthrough && (
+                  <div className="pt-6 border-t border-[#E8A598]/40 space-y-6">
+                    {/* Step-by-Step Mental Model */}
+                    <div className="space-y-3">
+                      <div className="text-xs font-bold uppercase tracking-wider text-[#9E4758]">
+                        Step-by-Step Engineering Breakdown
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {deepWalkthrough.stepByStepGuide.map((step) => (
+                          <div
+                            key={step.stepNumber}
+                            className="rounded-xl bg-[#FAF7F2] border border-[#E8A598]/50 p-4 flex flex-col justify-between space-y-3"
+                          >
+                            <div>
+                              <span className="inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-[#9E4758] text-white mb-2">
+                                Step {step.stepNumber}
+                              </span>
+                              <h5 className="font-bold text-sm text-[#1E293B] font-editorial">
+                                {step.title}
+                              </h5>
+                              <p className="text-xs text-[#1E293B] mt-1.5 leading-relaxed">
+                                {step.detail}
+                              </p>
+                            </div>
+                            <div className="p-2.5 rounded-lg bg-white border border-slate-200 text-[11px] font-mono text-[#9E4758] break-words">
+                              {step.exampleOrFormula}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Side-by-Side Comparison Matrix Table */}
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold uppercase tracking-wider text-[#1E293B] flex items-center gap-1.5">
+                        <Table className="w-3.5 h-3.5 text-[#9E4758]" />{' '}
+                        {deepWalkthrough.comparisonTable.title}
+                      </div>
+                      <div className="overflow-x-auto rounded-xl border border-[#E8A598]/50">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-[#F5EBE6] text-[#1E293B]">
+                              {deepWalkthrough.comparisonTable.headers.map((h, hIdx) => (
+                                <th key={hIdx} className="p-3 font-bold border-b border-[#E8A598]/40">
+                                  {h}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-slate-100">
+                            {deepWalkthrough.comparisonTable.rows.map((row, rIdx) => (
+                              <tr key={rIdx} className="hover:bg-[#FAF7F2]/60">
+                                <td className="p-3 font-semibold text-[#1E293B]">{row[0]}</td>
+                                <td className="p-3 text-[#64748B]">{row[1]}</td>
+                                <td className="p-3 font-medium text-[#9E4758]">{row[2]}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Real-World Production Debugging Playbook */}
+                    <div className="rounded-xl bg-slate-900 text-white p-4 space-y-2">
+                      <div className="text-xs font-mono font-bold uppercase text-[#E8A598] flex items-center gap-1.5">
+                        <Wrench className="w-3.5 h-3.5" /> Real-World Production Debugging Playbook
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs pt-1">
+                        <div className="bg-slate-800/90 p-3 rounded-lg border border-rose-500/30">
+                          <div className="font-mono text-[10px] uppercase text-rose-300 font-bold">
+                            1. Production Symptom
+                          </div>
+                          <p className="text-slate-100 mt-1">{deepWalkthrough.debuggingPlaybook.symptom}</p>
+                        </div>
+                        <div className="bg-slate-800/90 p-3 rounded-lg border border-amber-500/30">
+                          <div className="font-mono text-[10px] uppercase text-amber-300 font-bold">
+                            2. Root Cause
+                          </div>
+                          <p className="text-slate-100 mt-1">{deepWalkthrough.debuggingPlaybook.rootCause}</p>
+                        </div>
+                        <div className="bg-slate-800/90 p-3 rounded-lg border border-emerald-500/30">
+                          <div className="font-mono text-[10px] uppercase text-emerald-300 font-bold">
+                            3. Exact Engineering Fix
+                          </div>
+                          <p className="text-slate-100 mt-1">{deepWalkthrough.debuggingPlaybook.exactFix}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 1-Question Interactive Lesson Micro-Check */}
+                    <div className="rounded-xl bg-[#FDF6F4] border-2 border-[#E8A598] p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-[#9E4758]">
+                          ⚡ Lock It In: 30-Second Lesson Check (Auto-Completes Lesson on Correct Answer!)
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm font-bold text-[#1E293B]">
+                        {deepWalkthrough.microCheck.question}
+                      </p>
+                      <div className="space-y-2">
+                        {deepWalkthrough.microCheck.options.map((opt, oIdx) => {
+                          const chosen = selectedMicroOpt === oIdx;
+                          const answered = selectedMicroOpt !== undefined;
+                          const isRight = oIdx === deepWalkthrough.microCheck.correctIndex;
+
+                          let style = 'bg-white border-slate-200 text-[#1E293B] hover:border-[#9E4758]';
+                          if (answered) {
+                            if (isRight) style = 'bg-emerald-50 border-emerald-500 text-emerald-950 font-semibold';
+                            else if (chosen) style = 'bg-rose-50 border-rose-400 text-rose-900';
+                          }
+
+                          return (
+                            <button
+                              key={oIdx}
+                              type="button"
+                              onClick={() => {
+                                setLessonCheckAnswers((prev) => ({ ...prev, [lesson.id]: oIdx }));
+                                if (oIdx === deepWalkthrough.microCheck.correctIndex && !isCompleted) {
+                                  toggleLessonComplete(lesson.id, lesson.title);
+                                }
+                              }}
+                              className={`w-full text-left p-2.5 rounded-lg border text-xs transition-all flex items-start gap-2 ${style}`}
+                            >
+                              <span className="font-mono font-bold text-[#9E4758]">
+                                {String.fromCharCode(65 + oIdx)}.
+                              </span>
+                              <span>{opt}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {selectedMicroOpt !== undefined && (
+                        <div className="text-xs text-[#1E293B] bg-white p-3 rounded-lg border border-[#E8A598]/50">
+                          <strong className="text-[#9E4758]">Why: </strong>
+                          {deepWalkthrough.microCheck.explanation}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </article>
             );
           })}
@@ -369,13 +539,21 @@ export const TracksPage: React.FC = () => {
       {/* Track 5 Special: The AI Pulse Visual Radar Cards */}
       {activeTrack.pulseCards && activeTrack.pulseCards.length > 0 && (
         <section className="space-y-4">
-          <div>
-            <div className="text-xs font-bold uppercase tracking-wider text-[#9E4758]">
-              Cutting-Edge Industry Radar & Official Certifications
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-[#9E4758]">
+                Cutting-Edge Industry Radar & Official Certifications
+              </div>
+              <h3 className="text-2xl font-bold text-[#1E293B] font-editorial">
+                The AI Pulse: Trends, Architectures & Official Certification Links
+              </h3>
             </div>
-            <h3 className="text-2xl font-bold text-[#1E293B] font-editorial">
-              The AI Pulse: Trends, Architectures & Official Certification Links
-            </h3>
+            <Link
+              to="/ai-pulse"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#9E4758] text-white text-xs font-semibold hover:bg-[#7D3543]"
+            >
+              <Radio className="w-4 h-4" /> View Live Auto-Updating AI News Feed 🔔
+            </Link>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
