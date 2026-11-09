@@ -4,6 +4,7 @@ import { APPRECIATION_TOAST_MESSAGES } from '../data/achievementsData';
 import { LEARNING_TRACKS } from '../data/tracksData';
 import { LabScoreBreakdown } from '../types/academy';
 import { fetchLiveAiNews } from '../services/liveAiNewsService';
+import { fetchLiveGlobalModels } from '../services/liveModelsService';
 
 export interface ExamAttemptRecord {
   id: string;
@@ -275,20 +276,33 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     state
   ]);
 
-  // Global background polling for breaking AI news every 5 minutes
+  // Global background polling for new AI model launches & breaking AI news every 5 minutes
   useEffect(() => {
     if (!state.isAuthenticated) return;
     const pollInterval = setInterval(async () => {
       try {
-        const res = await fetchLiveAiNews();
-        if (res.newSinceLastVisit.length > 0) {
-          const topNew = res.newSinceLastVisit[0];
+        const [modelsRes, newsRes] = await Promise.all([
+          fetchLiveGlobalModels(),
+          fetchLiveAiNews()
+        ]);
+        if (modelsRes.newlyLaunched.length > 0) {
+          const topModel = modelsRes.newlyLaunched[0];
+          const title = `🚀 New AI Model Launched: ${topModel.name}`;
+          const body = `${topModel.countryFlag} ${topModel.country} (${topModel.provider}) — View Pros & Cons!`;
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(title, { body, icon: '/icon.svg' });
+          }
+          setActiveToast(`🔔 ${title} — ${body}`);
+          return;
+        }
+        if (newsRes.newSinceLastVisit.length > 0) {
+          const topNew = newsRes.newSinceLastVisit[0];
           const title = '🔥 Breaking AI News Update for Sushama!';
           const body = `${topNew.title} (${topNew.category})`;
           if ('Notification' in window && Notification.permission === 'granted') {
             new Notification(title, { body, icon: '/icon.svg' });
           }
-          setActiveToast(`🔔 New AI Release Detected: "${topNew.title}" — Check Live AI News Radar!`);
+          setActiveToast(`🔔 New AI Release Detected: "${topNew.title}" — Check Live AI Radar!`);
         }
       } catch {
         // Ignore transient network errors during background poll

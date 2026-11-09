@@ -45,8 +45,8 @@ const NAV_ITEMS = [
   },
   {
     path: '/ai-pulse',
-    label: 'Live AI News Radar',
-    shortLabel: 'Live News',
+    label: 'Live Models & AI News',
+    shortLabel: 'Models',
     icon: Radio,
     section: 'core',
     badge: 'LIVE'

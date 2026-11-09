@@ -24,6 +24,7 @@ import { LEARNING_TRACKS } from '../data/tracksData';
 import { ACHIEVEMENT_BADGES, PERSONAL_LOVE_NOTES } from '../data/achievementsData';
 import { PRACTICAL_LAB_TASKS } from '../data/practicalLabs';
 import { fetchLiveAiNews, LiveAiNewsItem } from '../services/liveAiNewsService';
+import { CURATED_GLOBAL_MODELS } from '../services/liveModelsService';
 
 export const DashboardPage: React.FC = () => {
   const {
@@ -311,16 +312,16 @@ export const DashboardPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Live Auto-Updating AI News & Breakthroughs Ticker */}
-      <section className="rounded-2xl border-2 border-[#9E4758]/30 bg-white p-5 md:p-6 shadow-editorial space-y-4">
+      {/* Live Global AI Models (Country Origin, Pros & Cons) + AI News Ticker */}
+      <section className="rounded-2xl border-2 border-[#9E4758]/30 bg-white p-5 md:p-6 shadow-editorial space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#9E4758] text-white text-xs font-bold uppercase tracking-wider">
               <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
-              <Radio className="w-3.5 h-3.5" /> Live Auto-Updating AI Feed
+              <Radio className="w-3.5 h-3.5" /> Live Auto-Updating Model Registry & News
             </span>
             <h2 className="text-lg md:text-xl font-bold text-[#1E293B] font-editorial">
-              Latest AI Engineering Breakthroughs & Releases
+              Latest Global AI Models (Country of Origin, Pros & Cons) 🌍
             </h2>
           </div>
 
@@ -328,11 +329,47 @@ export const DashboardPage: React.FC = () => {
             to="/ai-pulse"
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#FAF7F2] border border-[#E8A598] text-xs font-bold text-[#9E4758] hover:bg-[#F5EBE6]"
           >
-            Open Full Live AI Radar & Notifications 🔔 <ArrowRight className="w-3.5 h-3.5" />
+            View All Live Models, Countries, Pros/Cons & Alerts 🔔 <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* 4-Card Country & Pros/Cons Spotlight */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {CURATED_GLOBAL_MODELS.slice(0, 4).map((m) => (
+            <Link
+              key={m.id}
+              to="/ai-pulse"
+              className="rounded-xl border border-[#E8A598]/60 bg-[#FAF7F2]/60 p-3.5 hover:bg-white hover:border-[#9E4758] transition-all flex flex-col justify-between space-y-2"
+            >
+              <div>
+                <div className="flex items-center justify-between text-[11px] font-bold">
+                  <span className="inline-flex items-center gap-1 text-[#1E293B]">
+                    <span>{m.countryFlag}</span>
+                    <span>{m.country}</span>
+                  </span>
+                  <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-white border border-[#E8A598]/50 text-[#9E4758]">
+                    {m.licenseType}
+                  </span>
+                </div>
+                <div className="font-bold text-sm text-[#1E293B] mt-1.5 font-editorial">
+                  {m.name}
+                </div>
+                <div className="text-[11px] text-emerald-800 mt-1.5 line-clamp-2">
+                  <span className="font-bold">+ Pro:</span> {m.pros[0]}
+                </div>
+                <div className="text-[11px] text-amber-800 mt-1 line-clamp-2">
+                  <span className="font-bold">− Con:</span> {m.cons[0]}
+                </div>
+              </div>
+              <div className="text-[10px] font-mono text-[#9E4758] font-bold pt-1 border-t border-[#E8A598]/30 flex items-center justify-between">
+                <span>{m.provider}</span>
+                <span>{m.contextWindowTokens.toLocaleString()} ctx →</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-slate-100">
           {topLiveNews.map((news) => (
             <a
               key={news.id}
