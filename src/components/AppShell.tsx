@@ -17,11 +17,14 @@ import {
   ChevronRight,
   Menu,
   X,
-  Radio
+  Radio,
+  LogOut,
+  UserCheck
 } from 'lucide-react';
 import { useAcademy } from '../context/AcademyContext';
 import { LEARNING_TRACKS } from '../data/tracksData';
 import { WeMissedYouModal } from './WeMissedYouModal';
+import { LoginPage } from './LoginPage';
 
 const NAV_ITEMS = [
   {
@@ -96,6 +99,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const {
+    isAuthenticated,
+    loggedInUsername,
+    logout,
     userName,
     completedLessons,
     streakDays,
@@ -106,6 +112,37 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     unlockedBadges
   } = useAcademy();
   const location = useLocation();
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <AnimatePresence>
+          {activeToast && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className="fixed top-6 right-4 left-4 md:left-auto md:w-[420px] z-50 rounded-2xl bg-[#9E4758] text-white p-4 shadow-editorial-lg border border-[#E8A598] flex items-start justify-between gap-3"
+            >
+              <div className="flex items-start gap-3">
+                <Sparkles className="w-5 h-5 text-[#FAF7F2] shrink-0 mt-0.5" />
+                <p className="text-xs sm:text-sm font-medium leading-snug">{activeToast}</p>
+              </div>
+              <button
+                type="button"
+                onClick={dismissToast}
+                className="text-white/80 hover:text-white p-1"
+                aria-label="Dismiss notification"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <LoginPage />
+      </>
+    );
+  }
 
   const totalLessons = LEARNING_TRACKS.reduce((acc, t) => acc + t.lessons.length, 0);
   const progressPct = Math.round((completedLessons.length / totalLessons) * 100);
@@ -137,7 +174,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                   AI Engineer Academy
                 </div>
                 <div className="text-[11px] font-medium text-[#9E4758]">
-                  QA-to-AI Certification Portal
+                  Sushama's Certification Hub
                 </div>
               </div>
             )}
@@ -169,15 +206,22 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                     to={item.path}
                     end={item.path === '/'}
                     className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                      `flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                         isActive
                           ? 'bg-[#9E4758] text-white shadow-sm'
                           : 'text-[#1E293B] hover:bg-[#F5EBE6] hover:text-[#9E4758]'
                       }`
                     }
                   >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                    <div className="flex items-center gap-3 truncate">
+                      <Icon className="w-4 h-4 shrink-0" />
+                      {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                    </div>
+                    {!sidebarCollapsed && item.badge && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                        {item.badge}
+                      </span>
+                    )}
                   </NavLink>
                 );
               })}
@@ -226,7 +270,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         {!sidebarCollapsed && (
           <div className="p-4 m-3 rounded-2xl bg-[#F5EBE6] border border-[#E8A598]/50 space-y-3">
             <div className="flex items-center justify-between text-xs font-bold text-[#1E293B]">
-              <span>Overall Mastery</span>
+              <span>Sushama's Mastery</span>
               <span className="text-[#9E4758] font-mono">{progressPct}%</span>
             </div>
             <div className="w-full h-2 rounded-full bg-white overflow-hidden">
@@ -268,10 +312,15 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FAF7F2] border border-[#E8A598]/50 text-xs font-semibold text-[#1E293B]">
+              <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>@{loggedInUsername}</span>
+            </div>
+
             <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FAF7F2] border border-[#E8A598]/50 text-xs font-semibold text-[#9E4758]">
               <Flame className="w-3.5 h-3.5 fill-current" />
-              <span>{streakDays} Day Streak</span>
+              <span>{streakDays}d Streak</span>
             </div>
 
             <button
@@ -286,8 +335,18 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             >
               <Bell className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">
-                {studyNudgeEnabled ? 'Daily Nudges On 🔔' : 'Enable Daily Study Nudges 🔔'}
+                {studyNudgeEnabled ? 'Daily Nudges On 🔔' : 'Enable Nudges 🔔'}
               </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={logout}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-xs font-semibold text-[#64748B] hover:text-[#9E4758] hover:border-[#E8A598] transition-all"
+              title="Sign out"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Sign Out</span>
             </button>
           </div>
         </header>
@@ -403,11 +462,23 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 </nav>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-[#F5EBE6] border border-[#E8A598]/50 text-xs">
-                <div className="font-bold text-[#9E4758]">Mastery: {progressPct}%</div>
-                <div className="text-[#64748B] mt-0.5">
-                  {completedLessons.length}/{totalLessons} Lessons Completed
+              <div className="space-y-2">
+                <div className="p-3.5 rounded-xl bg-[#F5EBE6] border border-[#E8A598]/50 text-xs">
+                  <div className="font-bold text-[#9E4758]">Sushama's Mastery: {progressPct}%</div>
+                  <div className="text-[#64748B] mt-0.5">
+                    {completedLessons.length}/{totalLessons} Lessons Completed
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileDrawerOpen(false);
+                    logout();
+                  }}
+                  className="w-full py-2.5 px-3.5 rounded-xl bg-white border border-[#E8A598]/50 text-xs font-semibold text-[#9E4758] flex items-center justify-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" /> Sign Out (@{loggedInUsername})
+                </button>
               </div>
             </motion.div>
           </div>

@@ -3,6 +3,7 @@ import confetti from 'canvas-confetti';
 import { APPRECIATION_TOAST_MESSAGES } from '../data/achievementsData';
 import { LEARNING_TRACKS } from '../data/tracksData';
 import { LabScoreBreakdown } from '../types/academy';
+import { fetchLiveAiNews } from '../services/liveAiNewsService';
 
 export interface ExamAttemptRecord {
   id: string;
@@ -22,6 +23,8 @@ export interface LabSubmissionRecord {
 }
 
 interface AcademyState {
+  isAuthenticated: boolean;
+  loggedInUsername: string;
   userName: string;
   completedLessons: string[];
   bookmarkedItems: string[];
@@ -41,6 +44,8 @@ interface AcademyContextValue extends AcademyState {
   activeToast: string | null;
   showWeMissedYouModal: boolean;
   setShowWeMissedYouModal: (show: boolean) => void;
+  login: (username: string, password: string, remember?: boolean) => boolean;
+  logout: () => void;
   setUserName: (name: string) => void;
   toggleLessonComplete: (lessonId: string, lessonTitle?: string) => void;
   toggleBookmark: (itemId: string) => void;
@@ -58,8 +63,13 @@ interface AcademyContextValue extends AcademyState {
 
 const STORAGE_KEY = 'ai_engineer_academy_state_v1';
 
+const VALID_USERNAMES = ['sushama', 'sushama.patki', 'sushamapatki', 'sushama@ai-academy.com'];
+const VALID_PASSWORDS = ['Sushama@AI2026', 'sushama@ai2026', 'Sushama@2026', 'sushama2026'];
+
 const DEFAULT_STATE: AcademyState = {
-  userName: 'Future AI Engineer',
+  isAuthenticated: false,
+  loggedInUsername: 'sushama',
+  userName: 'Sushama',
   completedLessons: [],
   bookmarkedItems: [],
   flashcardsReviewed: [],
@@ -82,7 +92,11 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        return { ...DEFAULT_STATE, ...parsed };
+        const merged = { ...DEFAULT_STATE, ...parsed };
+        if (!merged.userName || merged.userName === 'Future AI Engineer') {
+          merged.userName = 'Sushama';
+        }
+        return merged;
       }
     } catch (e) {
       console.warn('Failed to parse localStorage state:', e);
@@ -98,7 +112,7 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const now = Date.now();
     const hoursSinceLastActive = (now - state.lastActiveTimestamp) / (1000 * 60 * 60);
 
-    if (hoursSinceLastActive >= 24 && state.completedLessons.length > 0) {
+    if (hoursSinceLastActive >= 24 && state.completedLessons.length > 0 && state.isAuthenticated) {
       setShowWeMissedYouModal(true);
     }
 
@@ -127,6 +141,29 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [state]);
 
+  // Global background polling for breaking AI news every 5 minutes
+  useEffect(() => {
+    if (!state.isAuthenticated) return;
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetchLiveAiNews();
+        if (res.newSinceLastVisit.length > 0) {
+          const topNew = res.newSinceLastVisit[0];
+          const title = '🔥 Breaking AI News Update for Sushama!';
+          const body = `${topNew.title} (${topNew.category})`;
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(title, { body, icon: '/icon.svg' });
+          }
+          setActiveToast(`🔔 New AI Release Detected: "${topNew.title}" — Check Live AI News Radar!`);
+        }
+      } catch {
+        // Ignore transient network errors during background poll
+      }
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(pollInterval);
+  }, [state.isAuthenticated]);
+
   const triggerCelebration = useCallback((customMessage?: string) => {
     try {
       confetti({
@@ -144,6 +181,34 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       APPRECIATION_TOAST_MESSAGES[Math.floor(Math.random() * APPRECIATION_TOAST_MESSAGES.length)];
     setActiveToast(randomMsg);
   }, []);
+
+  const login = (username: string, password: string, _remember = true): boolean => {
+    const cleanUser = username.trim().toLowerCase();
+    const cleanPass = password.trim();
+
+    if (VALID_USERNAMES.includes(cleanUser) && VALID_PASSWORDS.includes(cleanPass)) {
+      setState((prev) => ({
+        ...prev,
+        isAuthenticated: true,
+        loggedInUsername: 'sushama',
+        userName: prev.userName && prev.userName !== 'Future AI Engineer' ? prev.userName : 'Sushama',
+        lastActiveTimestamp: Date.now()
+      }));
+      triggerCelebration(
+        'Welcome back, Sushama! 🌸 Your QA-to-AI Engineering Portal & saved progress are ready ✨'
+      );
+      return true;
+    }
+    return false;
+  };
+
+  const logout = () => {
+    setState((prev) => ({
+      ...prev,
+      isAuthenticated: false
+    }));
+    setActiveToast('Signed out safely. All your progress is saved for your next session, Sushama 🌸');
+  };
 
   // Automatically evaluate badge unlock rules whenever progress updates
   useEffect(() => {
@@ -180,7 +245,7 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...prev,
         unlockedBadges: Array.from(new Set([...prev.unlockedBadges, ...newlyUnlocked]))
       }));
-      triggerCelebration(`New Milestone Badge Unlocked! Check your Achievements & Love Notes Wall ✨`);
+      triggerCelebration(`New Milestone Badge Unlocked, Sushama! Check your Achievements & Love Notes Wall ✨`);
     }
   }, [state.completedLessons, state.labSubmissions, state.examHistory, state.unlockedBadges, triggerCelebration]);
 
@@ -198,7 +263,7 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (!alreadyDone) {
         triggerCelebration(
           lessonTitle
-            ? `You just mastered "${lessonTitle}"! One step closer to that AI Engineer title ✨`
+            ? `Sushama, you just mastered "${lessonTitle}"! One step closer to that AI Engineer title ✨`
             : undefined
         );
       }
@@ -227,7 +292,7 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (prev.flashcardsReviewed.includes(cardId)) return prev;
       const updated = [...prev.flashcardsReviewed, cardId];
       if (updated.length % 4 === 0) {
-        triggerCelebration(`Active Recall Superstar! You've reviewed ${updated.length} flashcards 🌸`);
+        triggerCelebration(`Active Recall Superstar, Sushama! You've reviewed ${updated.length} flashcards 🌸`);
       }
       return { ...prev, flashcardsReviewed: updated, lastActiveTimestamp: Date.now() };
     });
@@ -245,7 +310,7 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const pct = Math.round((score / total) * 100);
     triggerCelebration(
       pct >= 80
-        ? `Brilliant ${pct}% on the Track Check! Your QA analytical instincts are spot-on ✨`
+        ? `Brilliant ${pct}% on the Track Check, Sushama! Your QA analytical instincts are spot-on ✨`
         : `Great practice round (${pct}%)! Every explanation reviewed sharpens your engineering edge 🌸`
     );
   };
@@ -258,7 +323,7 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }));
     if (attempt.passed) {
       triggerCelebration(
-        `CONGRATULATIONS! You scored ${attempt.percentage}% and unlocked your Certified AI Engineer Readiness Certificate! 🎓💖`
+        `CONGRATULATIONS SUSHAMA! You scored ${attempt.percentage}% and unlocked your Certified AI Engineer Readiness Certificate! 🎓💖`
       );
     } else {
       triggerCelebration(
@@ -278,7 +343,7 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }));
     if (breakdown.total >= 80) {
       triggerCelebration(
-        `Lab Passed with ${breakdown.total}/100 (${breakdown.verdictTitle})! Your hands-on AI engineering skills are shining ✨`
+        `Lab Passed with ${breakdown.total}/100 (${breakdown.verdictTitle}), Sushama! Your hands-on AI engineering skills are shining ✨`
       );
     }
   };
@@ -294,9 +359,9 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const sendTestStudyNotification = async () => {
-    const title = 'AI Engineer Academy 🌸';
+    const title = 'AI Engineer Academy for Sushama 🌸';
     const body =
-      'We miss you, Future AI Engineer! Just 5 minutes today on Claude MCP or RAG Evals will keep your streak glowing ✨';
+      'We miss you, Sushama! Just 5 minutes today on Claude MCP or RAG Evals will keep your streak glowing ✨';
 
     if ('Notification' in window && Notification.permission === 'granted') {
       try {
@@ -363,6 +428,8 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         activeToast,
         showWeMissedYouModal,
         setShowWeMissedYouModal,
+        login,
+        logout,
         setUserName,
         toggleLessonComplete,
         toggleBookmark,
